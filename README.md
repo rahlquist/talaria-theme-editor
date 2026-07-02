@@ -22,6 +22,13 @@ npm run dev     # → http://localhost:5199
    the fail-safe: **Keep changes** within 10 seconds or everything reverts.
 4. Kept edits mark the theme "edited". **Save to presets.ts** backs up the
    current file and writes the new one; the backup path is shown on success.
+5. **Copy** on any card prompts for a new label + name (unique slug), then
+   immediately backs up presets.ts, writes the copied theme into it, and
+   drops you straight into the editor for the copy.
+6. The **Keep backups** field in the header caps how many
+   `yyyyddmm-epoch-presets.ts` backups are retained — after every save the
+   oldest ones beyond the limit are deleted (only files matching the backup
+   pattern are ever touched). The setting persists in the browser.
 
 ## Develop
 

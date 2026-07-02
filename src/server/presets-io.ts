@@ -53,6 +53,26 @@ export async function backupPresets(presetsPath: string = PRESETS_PATH, now: Dat
   return backupPath
 }
 
+/** Matches only files this tool created: yyyyddmm-epoch-presets.ts */
+const BACKUP_RE = /^(\d{8})-(\d+)-presets\.ts$/
+
+/**
+ * Enforce the backup retention limit: keep the `maxBackups` newest
+ * (by epoch in the filename), delete the rest. Only files matching the
+ * backup pattern are ever touched. Returns the deleted filenames.
+ */
+export async function pruneBackups(presetsPath: string = PRESETS_PATH, maxBackups: number): Promise<string[]> {
+  if (!Number.isFinite(maxBackups) || maxBackups < 1) maxBackups = 1
+  const dir = path.dirname(presetsPath)
+  const backups = (await fs.readdir(dir))
+    .map(f => ({ f, m: BACKUP_RE.exec(f) }))
+    .filter((x): x is { f: string; m: RegExpExecArray } => x.m !== null)
+    .sort((a, b) => Number(b.m[2]) - Number(a.m[2])) // newest first
+  const excess = backups.slice(Math.floor(maxBackups)).map(x => x.f)
+  await Promise.all(excess.map(f => fs.unlink(path.join(dir, f))))
+  return excess
+}
+
 const quote = (value: string) => `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`
 
 function serializeRecord(record: Record<string, unknown>, indent: string): string {
@@ -133,13 +153,18 @@ export const DEFAULT_SKIN_NAME = ${quote(defaultSkinName)}
   return `${header}\n${themeBlocks}\n\n${registry}`
 }
 
-/** Backup, then write the regenerated file. Returns the backup path. */
+/**
+ * Backup, write the regenerated file, then enforce the retention limit.
+ * Returns the backup path and any pruned backup filenames.
+ */
 export async function saveThemes(
   themes: DesktopTheme[],
   defaultSkinName: string,
-  presetsPath: string = PRESETS_PATH
-): Promise<{ backupPath: string }> {
+  presetsPath: string = PRESETS_PATH,
+  maxBackups?: number
+): Promise<{ backupPath: string; pruned: string[] }> {
   const backupPath = await backupPresets(presetsPath)
   await fs.writeFile(presetsPath, generatePresetsFile(themes, defaultSkinName), 'utf8')
-  return { backupPath }
+  const pruned = maxBackups !== undefined ? await pruneBackups(presetsPath, maxBackups) : []
+  return { backupPath, pruned }
 }

@@ -31,9 +31,10 @@ interface ThemeCardProps {
   isDefault: boolean
   dirty: boolean
   onEdit: () => void
+  onCopy: () => void
 }
 
-export default function ThemeCard({ theme, mode, isDefault, dirty, onEdit }: ThemeCardProps) {
+export default function ThemeCard({ theme, mode, isDefault, dirty, onEdit, onCopy }: ThemeCardProps) {
   return (
     <div className="theme-card">
       <Thumb mode={mode} theme={theme} />
@@ -45,9 +46,14 @@ export default function ThemeCard({ theme, mode, isDefault, dirty, onEdit }: The
         </div>
         <div className="theme-card__desc">{theme.description}</div>
       </div>
-      <button className="btn btn--primary theme-card__edit" onClick={onEdit} type="button">
-        Edit theme
-      </button>
+      <div className="theme-card__actions">
+        <button className="btn btn--primary theme-card__edit" onClick={onEdit} type="button">
+          Edit theme
+        </button>
+        <button className="btn" onClick={onCopy} title="Duplicate this theme" type="button">
+          Copy
+        </button>
+      </div>
     </div>
   )
 }

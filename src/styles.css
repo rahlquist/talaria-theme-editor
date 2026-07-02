@@ -74,7 +74,25 @@ h1 { font-size: 20px; margin: 0 0 4px; }
 }
 .theme-card__title { font-weight: 600; }
 .theme-card__desc { color: #9a9ab2; font-size: 12px; min-height: 2.4em; }
-.theme-card__edit { align-self: stretch; }
+.theme-card__actions { display: flex; gap: 8px; }
+.theme-card__edit { flex: 1; }
+
+.backup-limit { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #9a9ab2; }
+.backup-limit input {
+  width: 58px; background: #1c1c2a; color: #e8e8f0;
+  border: 1px solid #30304a; border-radius: 6px; padding: 5px 6px; font-size: 12px;
+}
+
+/* ===== Modal (copy-theme prompt) ===== */
+.modal { position: fixed; inset: 0; display: grid; place-items: center; background: #000000a0; z-index: 60; }
+.modal__box {
+  background: #1c1c2c; border: 1px solid #3a3a55; border-radius: 14px;
+  padding: 20px 24px; width: 360px; box-shadow: 0 12px 40px #000000a0;
+}
+.modal__box h3 { margin: 0 0 12px; font-size: 15px; }
+.modal__box .error { font-size: 12px; margin: 4px 0; }
+.modal__actions { display: flex; gap: 10px; margin-top: 14px; }
+.modal__actions .btn { flex: 1; }
 
 /* Mini thumbnail mimicking Hermes' ThemePreview */
 .thumb { display: flex; height: 110px; border: 1px solid; border-radius: 8px; overflow: hidden; }

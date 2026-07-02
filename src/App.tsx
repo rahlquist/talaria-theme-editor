@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import CopyDialog from './components/CopyDialog'
 import Editor from './components/Editor'
 import ThemeCard from './components/ThemeCard'
 import type { DesktopTheme, ThemesPayload } from './types'
@@ -6,21 +7,35 @@ import type { DesktopTheme, ThemesPayload } from './types'
 /**
  * App shell. Two views:
  *   grid   — thumbnail cards for every theme in presets.ts (mirrors Hermes'
- *            appearance settings) with an Edit button per card
+ *            appearance settings) with Edit + Copy buttons per card
  *   editor — form + WYSIWYG preview + Apply / keep-or-revert flow
  *
  * Kept edits live in `themes` (session state). "Save to presets.ts" POSTs the
- * whole set: the server backs up the original (yyyyddmm-epoch-presets.ts)
- * then regenerates the file.
+ * whole set: the server backs up the original (yyyyddmm-epoch-presets.ts),
+ * regenerates the file, then prunes backups beyond the "keep backups" limit.
+ * Copying a theme saves immediately (backup + write) and opens its editor.
  */
+
+const MAX_BACKUPS_KEY = 'hermes-theme-editor.maxBackups'
+const DEFAULT_MAX_BACKUPS = 10
+
 export default function App() {
   const [payload, setPayload] = useState<ThemesPayload | null>(null)
   const [themes, setThemes] = useState<DesktopTheme[]>([])
   const [saved, setSaved] = useState<DesktopTheme[]>([])
   const [editing, setEditing] = useState<string | null>(null)
+  const [copying, setCopying] = useState<string | null>(null)
   const [gridMode, setGridMode] = useState<'light' | 'dark'>('dark')
   const [status, setStatus] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [savingBusy, setSavingBusy] = useState(false)
+  const [maxBackups, setMaxBackups] = useState(() => {
+    const stored = Number(localStorage.getItem(MAX_BACKUPS_KEY))
+    return Number.isFinite(stored) && stored >= 1 ? stored : DEFAULT_MAX_BACKUPS
+  })
+
+  useEffect(() => {
+    localStorage.setItem(MAX_BACKUPS_KEY, String(maxBackups))
+  }, [maxBackups])
 
   useEffect(() => {
     fetch('/api/themes')
@@ -38,24 +53,37 @@ export default function App() {
     return new Set(themes.filter(t => savedByName.get(t.name) !== JSON.stringify(t)).map(t => t.name))
   }, [themes, saved])
 
-  const save = async () => {
-    if (!payload) return
+  /** Backup + write the given list to presets.ts. Returns true on success. */
+  const persist = async (list: DesktopTheme[]): Promise<boolean> => {
+    if (!payload) return false
     setSavingBusy(true)
     setStatus(null)
     try {
       const res = await fetch('/api/themes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ themes, defaultSkinName: payload.defaultSkinName })
+        body: JSON.stringify({ themes: list, defaultSkinName: payload.defaultSkinName, maxBackups })
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      setSaved(themes)
-      setStatus({ kind: 'ok', text: `Saved. Backup: ${data.backupPath}` })
+      setThemes(list)
+      setSaved(list)
+      const prunedNote = data.pruned?.length ? ` Pruned ${data.pruned.length} old backup${data.pruned.length === 1 ? '' : 's'}.` : ''
+      setStatus({ kind: 'ok', text: `Saved. Backup: ${data.backupPath}.${prunedNote}` })
+      return true
     } catch (e) {
       setStatus({ kind: 'err', text: `Save failed: ${e}` })
+      return false
     } finally {
       setSavingBusy(false)
+    }
+  }
+
+  const createCopy = async (copy: DesktopTheme) => {
+    const ok = await persist([...themes, copy])
+    if (ok) {
+      setCopying(null)
+      setEditing(copy.name) // straight into the editor for the new theme
     }
   }
 
@@ -73,6 +101,8 @@ export default function App() {
     )
   }
 
+  const copySource = copying ? themes.find(t => t.name === copying) : null
+
   return (
     <div className="shell">
       <header className="grid-header">
@@ -81,6 +111,19 @@ export default function App() {
           <p className="path">Source: {payload.presetsPath}</p>
         </div>
         <div className="grid-header__actions">
+          <label className="backup-limit" title="Oldest backups beyond this count are deleted after each save">
+            Keep backups
+            <input
+              max={999}
+              min={1}
+              onChange={e => {
+                const n = Math.floor(Number(e.target.value))
+                if (Number.isFinite(n)) setMaxBackups(Math.min(999, Math.max(1, n)))
+              }}
+              type="number"
+              value={maxBackups}
+            />
+          </label>
           <span className="palette-tabs">
             <button className={gridMode === 'light' ? 'on' : ''} onClick={() => setGridMode('light')} type="button">
               Light
@@ -89,7 +132,12 @@ export default function App() {
               Dark
             </button>
           </span>
-          <button className="btn btn--primary" disabled={dirtyNames.size === 0 || savingBusy} onClick={save} type="button">
+          <button
+            className="btn btn--primary"
+            disabled={dirtyNames.size === 0 || savingBusy}
+            onClick={() => persist(themes)}
+            type="button"
+          >
             {savingBusy ? 'Saving…' : `Save to presets.ts${dirtyNames.size ? ` (${dirtyNames.size} edited)` : ''}`}
           </button>
         </div>
@@ -102,11 +150,21 @@ export default function App() {
             isDefault={theme.name === payload.defaultSkinName}
             key={theme.name}
             mode={gridMode}
+            onCopy={() => setCopying(theme.name)}
             onEdit={() => setEditing(theme.name)}
             theme={theme}
           />
         ))}
       </div>
+      {copySource && (
+        <CopyDialog
+          busy={savingBusy}
+          onCancel={() => setCopying(null)}
+          onCreate={createCopy}
+          source={copySource}
+          takenNames={themes.map(t => t.name)}
+        />
+      )}
     </div>
   )
 }

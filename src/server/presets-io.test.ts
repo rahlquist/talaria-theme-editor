@@ -7,6 +7,7 @@ import {
   backupFilename,
   generatePresetsFile,
   loadThemes,
+  pruneBackups,
   saveThemes,
   themeIdentifier
 } from './presets-io'
@@ -82,6 +83,41 @@ describe('load → save round trip (temp copy, never the real file)', () => {
     ]) {
       expect(text).toContain(contract)
     }
+  })
+
+  it('prunes only the oldest backups beyond the limit, never other files', async () => {
+    // Five fake backups, epochs 1000..5000, plus a decoy that must survive.
+    for (const epoch of [1000, 2000, 3000, 4000, 5000]) {
+      await fs.writeFile(path.join(dir, `20260207-${epoch}-presets.ts`), '// backup')
+    }
+    await fs.writeFile(path.join(dir, 'notes-presets.ts.txt'), 'decoy')
+
+    const pruned = await pruneBackups(presets, 2)
+    expect(pruned.sort()).toEqual(['20260207-1000-presets.ts', '20260207-2000-presets.ts', '20260207-3000-presets.ts'])
+
+    const left = await fs.readdir(dir)
+    expect(left).toContain('20260207-4000-presets.ts')
+    expect(left).toContain('20260207-5000-presets.ts')
+    expect(left).toContain('notes-presets.ts.txt')
+    expect(left).toContain('presets.ts')
+  })
+
+  it('saveThemes enforces maxBackups across repeated saves', async () => {
+    const { themes, defaultSkinName } = await loadThemes(presets)
+    for (let i = 0; i < 5; i++) {
+      await saveThemes(themes, defaultSkinName, presets, 3)
+      await new Promise(r => setTimeout(r, 2)) // distinct epoch filenames
+    }
+    const backups = (await fs.readdir(dir)).filter(f => /^\d{8}-\d+-presets\.ts$/.test(f))
+    expect(backups.length).toBe(3)
+  })
+
+  it('clamps a nonsensical limit to keeping at least one backup', async () => {
+    await fs.writeFile(path.join(dir, `20260207-1000-presets.ts`), '// backup')
+    await fs.writeFile(path.join(dir, `20260207-2000-presets.ts`), '// backup')
+    await pruneBackups(presets, 0)
+    const backups = (await fs.readdir(dir)).filter(f => /^\d{8}-\d+-presets\.ts$/.test(f))
+    expect(backups).toEqual(['20260207-2000-presets.ts'])
   })
 
   it('persists an edit', async () => {
