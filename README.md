@@ -10,7 +10,7 @@ except `themes/presets.ts` (always backed up first as
 > recommended for production. It rewrites your Hermes `presets.ts` (backups
 > are taken on every save, but still — use at your own risk).
 
-Created by rahlquist together with [Claude](https://claude.com/claude-code)
+Created by Richard Ahlquist together with [Claude](https://claude.com/claude-code)
 (Anthropic's Claude Code). Not affiliated with or endorsed by Nous Research.
 Licensed under the [MIT License](LICENSE).
 
