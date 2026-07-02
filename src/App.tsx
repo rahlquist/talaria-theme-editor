@@ -16,8 +16,8 @@ import type { DesktopTheme, ThemesPayload } from './types'
  * Copying a theme saves immediately (backup + write) and opens its editor.
  */
 
-const MAX_BACKUPS_KEY = 'hermes-theme-editor.maxBackups'
-const BACKUP_DIR_KEY = 'hermes-theme-editor.backupDir'
+const MAX_BACKUPS_KEY = 'talaria-theme-editor.maxBackups'
+const BACKUP_DIR_KEY = 'talaria-theme-editor.backupDir'
 const DEFAULT_MAX_BACKUPS = 10
 
 export default function App() {
@@ -124,7 +124,7 @@ export default function App() {
     <div className="shell">
       <header className="grid-header">
         <div>
-          <h1>Hermes Theme Editor</h1>
+          <h1>Talaria Theme Editor</h1>
           <p className="path">Source: {payload.presetsPath}</p>
         </div>
         <div className="grid-header__actions">

@@ -61,7 +61,7 @@ whatever hot-reload the dev build provides).
 ## Rebuilding this project from scratch
 
 ```bash
-cd ~/projects/theme_editor_claude
+cd ~/projects/talaria-theme-editor
 npm install                  # if esbuild's binary is blocked: npm approve-scripts esbuild
 npm run dev                  # UI + API on http://localhost:5199
 npm test                     # 11 vitest tests (temp-copy round trips)

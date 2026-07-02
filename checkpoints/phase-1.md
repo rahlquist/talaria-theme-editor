@@ -3,7 +3,7 @@
 Date: 2026-07-02
 
 ## What's done
-- Standalone Vite + React + TypeScript app scaffolded in `~/projects/theme_editor_claude` (git repo, `main` branch). Runs entirely outside Hermes: `npm run dev` → http://localhost:5199.
+- Standalone Vite + React + TypeScript app scaffolded in `~/projects/talaria-theme-editor` (git repo, `main` branch). Runs entirely outside Hermes: `npm run dev` → http://localhost:5199.
 - `src/types.ts` — mirror of Hermes' `DesktopTheme` / `DesktopThemeColors` / `DesktopThemeTypography` / `DesktopTerminalPalette` interfaces, plus `REQUIRED_COLOR_KEYS` / `OPTIONAL_COLOR_KEYS` ordered key lists that drive the editor form.
 - `src/server/presets-io.ts` — Node-side IO:
   - `loadThemes()` reads `~/.hermes/hermes-agent/apps/desktop/src/themes/presets.ts`, transpiles with esbuild (`loader: 'ts'`), imports via data: URL → returns the *evaluated* theme objects (tint helpers already resolved).
@@ -31,7 +31,7 @@ src/server/presets-io.ts
   - API as Vite middleware so one `npm run dev` is the entire standalone app.
 - **Commands to recreate**:
   ```bash
-  cd ~/projects/theme_editor_claude
+  cd ~/projects/talaria-theme-editor
   npm install        # may need: npm approve-scripts esbuild
   npm run dev        # serves UI + API on http://localhost:5199
   npm test           # vitest (Phase 5)

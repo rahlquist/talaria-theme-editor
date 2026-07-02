@@ -4,7 +4,7 @@ Date: 2026-07-02
 
 ## What's done
 - **Backup dir field** (grid header, localStorage key
-  `hermes-theme-editor.backupDir`): empty → backups land next to presets.ts
+  `talaria-theme-editor.backupDir`): empty → backups land next to presets.ts
   (unchanged default); otherwise `resolveBackupDir()` expands a leading `~`,
   resolves the path, and `mkdir -p`s it on first use. Sent as `backupDir`
   with every POST; `pruneBackups()` prunes in the active backup directory.

@@ -1,4 +1,4 @@
-# Hermes Theme Editor
+# Talaria Theme Editor
 
 Standalone visual (WYSIWYG) editor for the
 [Hermes Agent](https://github.com/nousresearch/hermes-agent) desktop theme
