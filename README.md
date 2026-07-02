@@ -14,6 +14,18 @@ Created by Richard Ahlquist together with [Claude](https://claude.com/claude-cod
 (Anthropic's Claude Code). Not affiliated with or endorsed by Nous Research.
 Licensed under the [MIT License](LICENSE).
 
+## Screenshots
+
+The theme grid — one card per theme in presets.ts, with Edit / Copy / Remove
+and the backup settings in the header:
+
+![Theme grid with thumbnail cards for each Hermes theme](screenshots/Screenshot_20260702_110419.png)
+
+The editor — color tokens and typography on the left, live WYSIWYG preview of
+a mock Hermes window on the right:
+
+![Theme editor with color fields and live preview](screenshots/Screenshot_20260702_110440.png)
+
 ## Run
 
 ```bash
