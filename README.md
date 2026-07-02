@@ -1,8 +1,18 @@
 # Hermes Theme Editor
 
-Standalone visual (WYSIWYG) editor for the Hermes Agent desktop theme presets —
-runs entirely outside Hermes and touches nothing in `~/.hermes` except
-`themes/presets.ts` (always backed up first as `yyyyddmm-epoch-presets.ts`).
+Standalone visual (WYSIWYG) editor for the
+[Hermes Agent](https://github.com/nousresearch/hermes-agent) desktop theme
+presets — runs entirely outside Hermes and touches nothing in `~/.hermes`
+except `themes/presets.ts` (always backed up first as
+`yyyyddmm-epoch-presets.ts`).
+
+> **⚠️ Proof of concept.** This is a POC built for personal use and is not
+> recommended for production. It rewrites your Hermes `presets.ts` (backups
+> are taken on every save, but still — use at your own risk).
+
+Created by rahlquist together with [Claude](https://claude.com/claude-code)
+(Anthropic's Claude Code). Not affiliated with or endorsed by Nous Research.
+Licensed under the [MIT License](LICENSE).
 
 ## Run
 
