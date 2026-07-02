@@ -17,6 +17,7 @@ import type { DesktopTheme, ThemesPayload } from './types'
  */
 
 const MAX_BACKUPS_KEY = 'hermes-theme-editor.maxBackups'
+const BACKUP_DIR_KEY = 'hermes-theme-editor.backupDir'
 const DEFAULT_MAX_BACKUPS = 10
 
 export default function App() {
@@ -32,10 +33,15 @@ export default function App() {
     const stored = Number(localStorage.getItem(MAX_BACKUPS_KEY))
     return Number.isFinite(stored) && stored >= 1 ? stored : DEFAULT_MAX_BACKUPS
   })
+  const [backupDir, setBackupDir] = useState(() => localStorage.getItem(BACKUP_DIR_KEY) ?? '')
 
   useEffect(() => {
     localStorage.setItem(MAX_BACKUPS_KEY, String(maxBackups))
   }, [maxBackups])
+
+  useEffect(() => {
+    localStorage.setItem(BACKUP_DIR_KEY, backupDir)
+  }, [backupDir])
 
   useEffect(() => {
     fetch('/api/themes')
@@ -54,20 +60,22 @@ export default function App() {
   }, [themes, saved])
 
   /** Backup + write the given list to presets.ts. Returns true on success. */
-  const persist = async (list: DesktopTheme[]): Promise<boolean> => {
+  const persist = async (list: DesktopTheme[], defaultSkinName?: string): Promise<boolean> => {
     if (!payload) return false
+    const skin = defaultSkinName ?? payload.defaultSkinName
     setSavingBusy(true)
     setStatus(null)
     try {
       const res = await fetch('/api/themes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ themes: list, defaultSkinName: payload.defaultSkinName, maxBackups })
+        body: JSON.stringify({ themes: list, defaultSkinName: skin, maxBackups, backupDir: backupDir.trim() || undefined })
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setThemes(list)
       setSaved(list)
+      setPayload(p => (p ? { ...p, defaultSkinName: skin } : p))
       const prunedNote = data.pruned?.length ? ` Pruned ${data.pruned.length} old backup${data.pruned.length === 1 ? '' : 's'}.` : ''
       setStatus({ kind: 'ok', text: `Saved. Backup: ${data.backupPath}.${prunedNote}` })
       return true
@@ -85,6 +93,15 @@ export default function App() {
       setCopying(null)
       setEditing(copy.name) // straight into the editor for the new theme
     }
+  }
+
+  const removeTheme = async (theme: DesktopTheme) => {
+    if (themes.length <= 1) return // belt & braces — the button is also disabled
+    if (!window.confirm(`Remove "${theme.label}" (${theme.name}) from presets.ts?\nA backup is taken first.`)) return
+    const remaining = themes.filter(t => t.name !== theme.name)
+    // presets.ts' DEFAULT_SKIN_NAME must point at a theme that exists.
+    const nextDefault = payload!.defaultSkinName === theme.name ? remaining[0].name : payload!.defaultSkinName
+    await persist(remaining, nextDefault)
   }
 
   if (!payload) return <div className="shell">{status ? <p className="error">{status.text}</p> : 'Loading themes…'}</div>
@@ -111,6 +128,16 @@ export default function App() {
           <p className="path">Source: {payload.presetsPath}</p>
         </div>
         <div className="grid-header__actions">
+          <label className="backup-limit backup-limit--path" title="Directory for yyyyddmm-epoch-presets.ts backups. Empty = next to presets.ts. ~ is expanded; created if missing.">
+            Backup dir
+            <input
+              onChange={e => setBackupDir(e.target.value)}
+              placeholder="(next to presets.ts)"
+              spellCheck={false}
+              type="text"
+              value={backupDir}
+            />
+          </label>
           <label className="backup-limit" title="Oldest backups beyond this count are deleted after each save">
             Keep backups
             <input
@@ -150,8 +177,10 @@ export default function App() {
             isDefault={theme.name === payload.defaultSkinName}
             key={theme.name}
             mode={gridMode}
+            lastTheme={themes.length <= 1}
             onCopy={() => setCopying(theme.name)}
             onEdit={() => setEditing(theme.name)}
+            onRemove={() => removeTheme(theme)}
             theme={theme}
           />
         ))}

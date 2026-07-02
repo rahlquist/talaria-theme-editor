@@ -32,9 +32,12 @@ interface ThemeCardProps {
   dirty: boolean
   onEdit: () => void
   onCopy: () => void
+  onRemove: () => void
+  /** True when this is the only theme left — removal would brick Hermes. */
+  lastTheme: boolean
 }
 
-export default function ThemeCard({ theme, mode, isDefault, dirty, onEdit, onCopy }: ThemeCardProps) {
+export default function ThemeCard({ theme, mode, isDefault, dirty, onEdit, onCopy, onRemove, lastTheme }: ThemeCardProps) {
   return (
     <div className="theme-card">
       <Thumb mode={mode} theme={theme} />
@@ -52,6 +55,15 @@ export default function ThemeCard({ theme, mode, isDefault, dirty, onEdit, onCop
         </button>
         <button className="btn" onClick={onCopy} title="Duplicate this theme" type="button">
           Copy
+        </button>
+        <button
+          className="btn btn--danger"
+          disabled={lastTheme}
+          onClick={onRemove}
+          title={lastTheme ? 'Cannot remove the last remaining theme' : 'Remove this theme from presets.ts'}
+          type="button"
+        >
+          Remove
         </button>
       </div>
     </div>

@@ -40,15 +40,14 @@ function hermesThemeApi(): Plugin {
           req.on('end', () => {
             Promise.resolve()
               .then(async () => {
-                const { themes, defaultSkinName, maxBackups } = JSON.parse(body)
+                const { themes, defaultSkinName, maxBackups, backupDir } = JSON.parse(body)
+                // Guard on the server too: an empty theme list would brick Hermes.
                 if (!Array.isArray(themes) || themes.length === 0) throw new Error('themes must be a non-empty array')
                 const m = await io()
-                const { backupPath, pruned } = await m.saveThemes(
-                  themes,
-                  defaultSkinName ?? 'nous',
-                  undefined,
-                  typeof maxBackups === 'number' ? maxBackups : undefined
-                )
+                const { backupPath, pruned } = await m.saveThemes(themes, defaultSkinName ?? 'nous', undefined, {
+                  maxBackups: typeof maxBackups === 'number' ? maxBackups : undefined,
+                  backupDir: typeof backupDir === 'string' ? backupDir : undefined
+                })
                 res.setHeader('Content-Type', 'application/json')
                 res.end(JSON.stringify({ ok: true, backupPath, pruned }))
               })

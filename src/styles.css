@@ -82,6 +82,10 @@ h1 { font-size: 20px; margin: 0 0 4px; }
   width: 58px; background: #1c1c2a; color: #e8e8f0;
   border: 1px solid #30304a; border-radius: 6px; padding: 5px 6px; font-size: 12px;
 }
+.backup-limit--path input { width: 190px; font-family: ui-monospace, monospace; font-size: 11px; }
+
+.btn--danger { border-color: #5a2a34; color: #ff8090; }
+.btn--danger:hover:not(:disabled) { background: #3a1c24; }
 
 /* ===== Modal (copy-theme prompt) ===== */
 .modal { position: fixed; inset: 0; display: grid; place-items: center; background: #000000a0; z-index: 60; }

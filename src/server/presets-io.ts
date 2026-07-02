@@ -46,9 +46,27 @@ export function backupFilename(now: Date = new Date()): string {
   return `${yyyy}${dd}${mm}-${now.getTime()}-presets.ts`
 }
 
-/** Copy the current presets.ts to its timestamped backup; returns backup path. */
-export async function backupPresets(presetsPath: string = PRESETS_PATH, now: Date = new Date()): Promise<string> {
-  const backupPath = path.join(path.dirname(presetsPath), backupFilename(now))
+/** Expand a leading ~ and resolve; empty/undefined → dir of presets.ts. */
+export function resolveBackupDir(presetsPath: string, backupDir?: string): string {
+  const raw = backupDir?.trim()
+  if (!raw) return path.dirname(presetsPath)
+  const expanded = raw === '~' || raw.startsWith('~/') ? path.join(os.homedir(), raw.slice(1)) : raw
+  return path.resolve(expanded)
+}
+
+/**
+ * Copy the current presets.ts to its timestamped backup (in `backupDir` when
+ * given, else alongside the original); returns the backup path. The custom
+ * directory is created on demand.
+ */
+export async function backupPresets(
+  presetsPath: string = PRESETS_PATH,
+  now: Date = new Date(),
+  backupDir?: string
+): Promise<string> {
+  const dir = resolveBackupDir(presetsPath, backupDir)
+  await fs.mkdir(dir, { recursive: true })
+  const backupPath = path.join(dir, backupFilename(now))
   await fs.copyFile(presetsPath, backupPath)
   return backupPath
 }
@@ -61,9 +79,13 @@ const BACKUP_RE = /^(\d{8})-(\d+)-presets\.ts$/
  * (by epoch in the filename), delete the rest. Only files matching the
  * backup pattern are ever touched. Returns the deleted filenames.
  */
-export async function pruneBackups(presetsPath: string = PRESETS_PATH, maxBackups: number): Promise<string[]> {
+export async function pruneBackups(
+  presetsPath: string = PRESETS_PATH,
+  maxBackups: number,
+  backupDir?: string
+): Promise<string[]> {
   if (!Number.isFinite(maxBackups) || maxBackups < 1) maxBackups = 1
-  const dir = path.dirname(presetsPath)
+  const dir = resolveBackupDir(presetsPath, backupDir)
   const backups = (await fs.readdir(dir))
     .map(f => ({ f, m: BACKUP_RE.exec(f) }))
     .filter((x): x is { f: string; m: RegExpExecArray } => x.m !== null)
@@ -161,10 +183,12 @@ export async function saveThemes(
   themes: DesktopTheme[],
   defaultSkinName: string,
   presetsPath: string = PRESETS_PATH,
-  maxBackups?: number
+  options: { maxBackups?: number; backupDir?: string } = {}
 ): Promise<{ backupPath: string; pruned: string[] }> {
-  const backupPath = await backupPresets(presetsPath)
+  if (themes.length === 0) throw new Error('refusing to write presets.ts with zero themes')
+  const backupPath = await backupPresets(presetsPath, new Date(), options.backupDir)
   await fs.writeFile(presetsPath, generatePresetsFile(themes, defaultSkinName), 'utf8')
-  const pruned = maxBackups !== undefined ? await pruneBackups(presetsPath, maxBackups) : []
+  const pruned =
+    options.maxBackups !== undefined ? await pruneBackups(presetsPath, options.maxBackups, options.backupDir) : []
   return { backupPath, pruned }
 }

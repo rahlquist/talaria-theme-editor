@@ -8,6 +8,7 @@ import {
   generatePresetsFile,
   loadThemes,
   pruneBackups,
+  resolveBackupDir,
   saveThemes,
   themeIdentifier
 } from './presets-io'
@@ -105,7 +106,7 @@ describe('load → save round trip (temp copy, never the real file)', () => {
   it('saveThemes enforces maxBackups across repeated saves', async () => {
     const { themes, defaultSkinName } = await loadThemes(presets)
     for (let i = 0; i < 5; i++) {
-      await saveThemes(themes, defaultSkinName, presets, 3)
+      await saveThemes(themes, defaultSkinName, presets, { maxBackups: 3 })
       await new Promise(r => setTimeout(r, 2)) // distinct epoch filenames
     }
     const backups = (await fs.readdir(dir)).filter(f => /^\d{8}-\d+-presets\.ts$/.test(f))
@@ -120,6 +121,25 @@ describe('load → save round trip (temp copy, never the real file)', () => {
     expect(backups).toEqual(['20260207-2000-presets.ts'])
   })
 
+  it('writes backups to a custom directory (created on demand) and prunes there', async () => {
+    const custom = path.join(dir, 'my/backups') // does not exist yet
+    const { themes, defaultSkinName } = await loadThemes(presets)
+    for (let i = 0; i < 3; i++) {
+      const { backupPath } = await saveThemes(themes, defaultSkinName, presets, { maxBackups: 2, backupDir: custom })
+      expect(path.dirname(backupPath)).toBe(custom)
+      await new Promise(r => setTimeout(r, 2))
+    }
+    const inCustom = (await fs.readdir(custom)).filter(f => /^\d{8}-\d+-presets\.ts$/.test(f))
+    expect(inCustom.length).toBe(2)
+    // nothing was written next to presets.ts
+    const inMain = (await fs.readdir(dir)).filter(f => /^\d{8}-\d+-presets\.ts$/.test(f))
+    expect(inMain.length).toBe(0)
+  })
+
+  it('refuses to write an empty theme list', async () => {
+    await expect(saveThemes([], 'nous', presets)).rejects.toThrow(/zero themes/)
+  })
+
   it('persists an edit', async () => {
     const { themes, defaultSkinName } = await loadThemes(presets)
     const edited = themes.map(t =>
@@ -130,6 +150,19 @@ describe('load → save round trip (temp copy, never the real file)', () => {
     const mono = reloaded.themes.find(t => t.name === 'mono')!
     expect(mono.colors.primary).toBe('#ff00ff')
     expect(mono.description).toBe('edited!')
+  })
+})
+
+describe('resolveBackupDir', () => {
+  it('defaults to the presets.ts directory', () => {
+    expect(resolveBackupDir('/a/b/presets.ts')).toBe('/a/b')
+    expect(resolveBackupDir('/a/b/presets.ts', '   ')).toBe('/a/b')
+  })
+  it('expands a leading ~', () => {
+    expect(resolveBackupDir('/a/b/presets.ts', '~/backups')).toBe(path.join(os.homedir(), 'backups'))
+  })
+  it('resolves relative paths', () => {
+    expect(path.isAbsolute(resolveBackupDir('/a/b/presets.ts', 'rel/dir'))).toBe(true)
   })
 })
 

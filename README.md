@@ -29,6 +29,13 @@ npm run dev     # → http://localhost:5199
    `yyyyddmm-epoch-presets.ts` backups are retained — after every save the
    oldest ones beyond the limit are deleted (only files matching the backup
    pattern are ever touched). The setting persists in the browser.
+7. The **Backup dir** field sets where backups are written (empty = next to
+   presets.ts; `~` expands; the directory is created if missing). Pruning
+   applies to whichever directory is active.
+8. **Remove** on a card deletes that theme from presets.ts (after a confirm,
+   with the usual backup first). Removing the last remaining theme is never
+   allowed, and if you remove the default theme, `DEFAULT_SKIN_NAME` is
+   repointed to the first remaining one.
 
 ## Develop
 
