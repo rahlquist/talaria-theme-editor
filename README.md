@@ -1,0 +1,31 @@
+# Hermes Theme Editor
+
+Standalone visual (WYSIWYG) editor for the Hermes Agent desktop theme presets —
+runs entirely outside Hermes and touches nothing in `~/.hermes` except
+`themes/presets.ts` (always backed up first as `yyyyddmm-epoch-presets.ts`).
+
+## Run
+
+```bash
+npm install     # first time (if esbuild is blocked: npm approve-scripts esbuild)
+npm run dev     # → http://localhost:5199
+```
+
+## Use
+
+1. The grid mirrors Hermes' appearance settings — one thumbnail per theme in
+   presets.ts. Click **Edit theme** on any card.
+2. Change colors (every token, light + dark palettes), label/description, and
+   fonts (`fontSans` / `fontMono` stacks, `fontUrl` stylesheet). Font *size*
+   is not stored in presets.ts, so the zoom slider affects the preview only.
+3. **Apply to preview** paints your draft into the mock Hermes window and pops
+   the fail-safe: **Keep changes** within 10 seconds or everything reverts.
+4. Kept edits mark the theme "edited". **Save to presets.ts** backs up the
+   current file and writes the new one; the backup path is shown on success.
+
+## Develop
+
+- `npm test` — vitest (serializer round trips run against temp copies)
+- `npm run build` — strict typecheck + production bundle
+- `checkpoints/` — per-phase build log; `REAPPLY.md` — how to re-sync with
+  future Hermes versions and integrate the button into Hermes' own menu.
