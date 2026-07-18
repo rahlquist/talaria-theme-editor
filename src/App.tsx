@@ -1,19 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
+import ThemeList from './components/ThemeList'
+import ThemeEditor from './components/ThemeEditor'
+import PreviewPane from './components/PreviewPane'
+import KeepDialog from './components/KeepDialog'
 import CopyDialog from './components/CopyDialog'
-import Editor from './components/Editor'
-import ThemeCard from './components/ThemeCard'
-import type { DesktopTheme, ThemesPayload } from './types'
+import type { DesktopTheme, DesktopThemeColors, ThemesPayload } from './types'
 
 /**
- * App shell. Two views:
- *   grid   — thumbnail cards for every theme in presets.ts (mirrors Hermes'
- *            appearance settings) with Edit + Copy buttons per card
- *   editor — form + WYSIWYG preview + Apply / keep-or-revert flow
- *
- * Kept edits live in `themes` (session state). "Save to presets.ts" POSTs the
- * whole set: the server backs up the original (yyyyddmm-epoch-presets.ts),
- * regenerates the file, then prunes backups beyond the "keep backups" limit.
- * Copying a theme saves immediately (backup + write) and opens its editor.
+ * Repo #1-style 3-pane shell (theme list | editor | live preview) with an
+ * apply bar and keep/revert fail-safe, sitting on repo #2's evaluated backend.
+ * The list shows every theme; the editor edits the selected one; preview
+ * reflects the *committed* theme until Apply paints the draft.
  */
 
 const MAX_BACKUPS_KEY = 'talaria-theme-editor.maxBackups'
@@ -24,9 +21,8 @@ export default function App() {
   const [payload, setPayload] = useState<ThemesPayload | null>(null)
   const [themes, setThemes] = useState<DesktopTheme[]>([])
   const [saved, setSaved] = useState<DesktopTheme[]>([])
-  const [editing, setEditing] = useState<string | null>(null)
-  const [copying, setCopying] = useState<string | null>(null)
-  const [gridMode, setGridMode] = useState<'light' | 'dark'>('dark')
+  const [selectedName, setSelectedName] = useState<string | null>(null)
+  const [previewMode, setPreviewMode] = useState<'light' | 'dark'>('light')
   const [status, setStatus] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null)
   const [savingBusy, setSavingBusy] = useState(false)
   const [maxBackups, setMaxBackups] = useState(() => {
@@ -34,11 +30,12 @@ export default function App() {
     return Number.isFinite(stored) && stored >= 1 ? stored : DEFAULT_MAX_BACKUPS
   })
   const [backupDir, setBackupDir] = useState(() => localStorage.getItem(BACKUP_DIR_KEY) ?? '')
+  const [keepOpen, setKeepOpen] = useState(false)
+  const [copySource, setCopySource] = useState<string | null>(null)
 
   useEffect(() => {
     localStorage.setItem(MAX_BACKUPS_KEY, String(maxBackups))
   }, [maxBackups])
-
   useEffect(() => {
     localStorage.setItem(BACKUP_DIR_KEY, backupDir)
   }, [backupDir])
@@ -50,148 +47,250 @@ export default function App() {
         setPayload(p)
         setThemes(p.themes)
         setSaved(p.themes)
+        if (p.themes[0]) {
+          setSelectedName(p.themes[0].name)
+          setPreviewMode(p.themes[0].darkColors ? 'dark' : 'light')
+        }
       })
       .catch(e => setStatus({ kind: 'err', text: `Failed to load presets.ts: ${e}` }))
   }, [])
 
   const dirtyNames = useMemo(() => {
     const savedByName = new Map(saved.map(t => [t.name, JSON.stringify(t)]))
-    return new Set(themes.filter(t => savedByName.get(t.name) !== JSON.stringify(t)).map(t => t.name))
+    return new Set(
+      themes.filter(t => savedByName.get(t.name) !== JSON.stringify(t)).map(t => t.name)
+    )
   }, [themes, saved])
 
-  /** Backup + write the given list to presets.ts. Returns true on success. */
+  const workingTheme = selectedName ? themes.find(t => t.name === selectedName) ?? null : null
+
+  const showStatus = (msg: string, kind: 'ok' | 'err' = 'ok') => {
+    setStatus({ kind, text: msg })
+    window.setTimeout(() => setStatus(s => (s && s.text === msg ? null : s)), 4000)
+  }
+
   const persist = async (list: DesktopTheme[], defaultSkinName?: string): Promise<boolean> => {
     if (!payload) return false
     const skin = defaultSkinName ?? payload.defaultSkinName
     setSavingBusy(true)
-    setStatus(null)
     try {
       const res = await fetch('/api/themes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ themes: list, defaultSkinName: skin, maxBackups, backupDir: backupDir.trim() || undefined })
+        body: JSON.stringify({
+          themes: list,
+          defaultSkinName: skin,
+          maxBackups,
+          backupDir: backupDir.trim() || undefined,
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setThemes(list)
       setSaved(list)
-      setPayload(p => (p ? { ...p, defaultSkinName: skin } : p))
-      const prunedNote = data.pruned?.length ? ` Pruned ${data.pruned.length} old backup${data.pruned.length === 1 ? '' : 's'}.` : ''
-      setStatus({ kind: 'ok', text: `Saved. Backup: ${data.backupPath}.${prunedNote}` })
+      const prunedNote = data.pruned?.length
+        ? ` Pruned ${data.pruned.length} old backup${data.pruned.length === 1 ? '' : 's'}.`
+        : ''
+      showStatus(`Saved. Backup: ${data.backupPath}.${prunedNote}`)
       return true
     } catch (e) {
-      setStatus({ kind: 'err', text: `Save failed: ${e}` })
+      showStatus(`Save failed: ${e}`, 'err')
       return false
     } finally {
       setSavingBusy(false)
     }
   }
 
-  const createCopy = async (copy: DesktopTheme) => {
-    const ok = await persist([...themes, copy])
-    if (ok) {
-      setCopying(null)
-      setEditing(copy.name) // straight into the editor for the new theme
-    }
-  }
-
-  const removeTheme = async (theme: DesktopTheme) => {
-    if (themes.length <= 1) return // belt & braces — the button is also disabled
-    if (!window.confirm(`Remove "${theme.label}" (${theme.name}) from presets.ts?\nA backup is taken first.`)) return
-    const remaining = themes.filter(t => t.name !== theme.name)
-    // presets.ts' DEFAULT_SKIN_NAME must point at a theme that exists.
-    const nextDefault = payload!.defaultSkinName === theme.name ? remaining[0].name : payload!.defaultSkinName
-    await persist(remaining, nextDefault)
-  }
-
-  if (!payload) return <div className="shell">{status ? <p className="error">{status.text}</p> : 'Loading themes…'}</div>
-
-  const editingTheme = editing ? themes.find(t => t.name === editing) : null
-  if (editingTheme) {
-    return (
-      <Editor
-        key={editingTheme.name}
-        onBack={() => setEditing(null)}
-        onCommit={updated => setThemes(list => list.map(t => (t.name === updated.name ? updated : t)))}
-        theme={editingTheme}
-      />
+  const setColor = (palette: string, key: string, value: string | undefined) => {
+    if (!selectedName) return
+    setThemes(prev =>
+      prev.map(t => {
+        if (t.name !== selectedName) return t
+        const next = { ...t }
+        if (palette === 'darkColors') {
+          next.darkColors = { ...(next.darkColors || {}), [key]: value } as DesktopTheme['darkColors']
+        } else {
+          next.colors = { ...next.colors, [key]: value } as DesktopThemeColors
+        }
+        return next
+      })
     )
   }
 
-  const copySource = copying ? themes.find(t => t.name === copying) : null
+  const setMeta = (key: string, value: string) => {
+    if (!selectedName) return
+    setThemes(prev => prev.map(t => (t.name === selectedName ? { ...t, [key]: value } : t)))
+  }
+
+  const setTypo = (key: 'fontSans' | 'fontMono' | 'fontUrl', value: string) => {
+    if (!selectedName) return
+    setThemes(prev =>
+      prev.map(t => {
+        if (t.name !== selectedName) return t
+        const typography = { ...t.typography, [key]: value || undefined }
+        const empty = Object.values(typography).every(v => v === undefined)
+        return { ...t, typography: empty ? undefined : typography }
+      })
+    )
+  }
+
+  const handleSelect = (name: string) => {
+    if (dirtyNames.size > 0 && name !== selectedName) {
+      if (!window.confirm('You have unsaved changes. Switch themes and discard them?')) return
+      setThemes(saved)
+    }
+    setSelectedName(name)
+    const t = themes.find(x => x.name === name)
+    if (t) setPreviewMode(t.darkColors ? 'dark' : 'light')
+  }
+
+  const handleApply = async () => {
+    if (!workingTheme) return
+    const ok = await persist(themes)
+    if (ok) setKeepOpen(true)
+  }
+
+  const handleCopyCreate = async (copy: DesktopTheme) => {
+    const ok = await persist([...themes, copy])
+    if (ok) {
+      setCopySource(null)
+      setSelectedName(copy.name)
+    }
+  }
+
+  const handleRemove = async (name: string) => {
+    if (themes.length <= 1) return
+    if (!window.confirm(`Remove "${name}"? A backup is taken first.`)) return
+    const remaining = themes.filter(t => t.name !== name)
+    const nextDefault =
+      payload!.defaultSkinName === name ? remaining[0].name : payload!.defaultSkinName
+    const ok = await persist(remaining, nextDefault)
+    if (ok && selectedName === name) setSelectedName(remaining[0]?.name ?? null)
+  }
+
+  if (!payload || !workingTheme) {
+    return (
+      <div className="app-layout">
+        <div className="app-header">
+          <h1>Talaria Theme Editor</h1>
+          <span className="subtitle">for Hermes Agent</span>
+        </div>
+        <div className="empty-state">
+          <div className="icon">🎨</div>
+          <h2>{payload ? 'Select a theme to edit' : 'Loading themes…'}</h2>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="shell">
-      <header className="grid-header">
-        <div>
+    <div className="app-layout">
+      <header className="app-header">
+        <div style={{ display: 'flex', alignItems: 'center' }}>
           <h1>Talaria Theme Editor</h1>
-          <p className="path">Source: {payload.presetsPath}</p>
+          <span className="subtitle">for Hermes Agent</span>
         </div>
-        <div className="grid-header__actions">
-          <label className="backup-limit backup-limit--path" title="Directory for yyyyddmm-epoch-presets.ts backups. Empty = next to presets.ts. ~ is expanded; created if missing.">
-            Backup dir
+        <div className="header-controls">
+          <label>
+            Max backups:
             <input
-              onChange={e => setBackupDir(e.target.value)}
-              placeholder="(next to presets.ts)"
-              spellCheck={false}
+              type="number"
+              min={1}
+              max={9999}
+              value={maxBackups}
+              onChange={e => setMaxBackups(Math.min(9999, Math.max(1, Math.floor(Number(e.target.value)) || DEFAULT_MAX_BACKUPS)))}
+            />
+          </label>
+          <label>
+            Backup dir:
+            <input
               type="text"
               value={backupDir}
+              placeholder="(next to presets.ts)"
+              onChange={e => setBackupDir(e.target.value)}
             />
           </label>
-          <label className="backup-limit" title="Oldest backups beyond this count are deleted after each save">
-            Keep backups
-            <input
-              max={999}
-              min={1}
-              onChange={e => {
-                const n = Math.floor(Number(e.target.value))
-                if (Number.isFinite(n)) setMaxBackups(Math.min(999, Math.max(1, n)))
-              }}
-              type="number"
-              value={maxBackups}
-            />
-          </label>
-          <span className="palette-tabs">
-            <button className={gridMode === 'light' ? 'on' : ''} onClick={() => setGridMode('light')} type="button">
-              Light
-            </button>
-            <button className={gridMode === 'dark' ? 'on' : ''} onClick={() => setGridMode('dark')} type="button">
-              Dark
-            </button>
-          </span>
-          <button
-            className="btn btn--primary"
-            disabled={dirtyNames.size === 0 || savingBusy}
-            onClick={() => persist(themes)}
-            type="button"
-          >
-            {savingBusy ? 'Saving…' : `Save to presets.ts${dirtyNames.size ? ` (${dirtyNames.size} edited)` : ''}`}
-          </button>
         </div>
       </header>
-      {status && <p className={status.kind === 'ok' ? 'status-ok' : 'error'}>{status.text}</p>}
-      <div className="theme-grid">
-        {themes.map(theme => (
-          <ThemeCard
-            dirty={dirtyNames.has(theme.name)}
-            isDefault={theme.name === payload.defaultSkinName}
-            key={theme.name}
-            mode={gridMode}
-            lastTheme={themes.length <= 1}
-            onCopy={() => setCopying(theme.name)}
-            onEdit={() => setEditing(theme.name)}
-            onRemove={() => removeTheme(theme)}
-            theme={theme}
-          />
-        ))}
+
+      <div className="app-main">
+        <ThemeList
+          themes={themes}
+          selectedName={selectedName}
+          isDefault={name => name === payload.defaultSkinName}
+          dirtyNames={dirtyNames}
+          onSelect={handleSelect}
+          onCopy={setCopySource}
+          onDelete={handleRemove}
+        />
+
+        <ThemeEditor
+          theme={workingTheme}
+          onChangeColor={setColor}
+          onChangeMeta={setMeta}
+          onChangeTypo={setTypo}
+        />
+
+        <div className="preview-panel">
+          <div className="preview-toolbar">
+            <h3>WYSIWYG Preview</h3>
+            <div className="mode-toggle">
+              <button
+                className={`mode-btn ${previewMode === 'light' ? 'active' : ''}`}
+                onClick={() => setPreviewMode('light')}
+                type="button"
+              >
+                ☀️ Light
+              </button>
+              <button
+                className={`mode-btn ${previewMode === 'dark' ? 'active' : ''}`}
+                onClick={() => setPreviewMode('dark')}
+                type="button"
+              >
+                🌙 Dark
+              </button>
+            </div>
+          </div>
+          <div className="preview-frame">
+            <PreviewPane theme={workingTheme} mode={previewMode} fontScale={1} />
+          </div>
+        </div>
       </div>
+
+      <div className="apply-bar">
+        <span className="has-changes">
+          {dirtyNames.size > 0 ? `⚠️ ${dirtyNames.size} theme(s) edited` : '💡 No changes'}
+        </span>
+        <div style={{ flex: 1 }} />
+        <button
+          className="btn btn-accent"
+          disabled={dirtyNames.size === 0 || savingBusy}
+          onClick={handleApply}
+          type="button"
+        >
+          {savingBusy ? 'Saving…' : 'Apply Changes'}
+        </button>
+      </div>
+
+      {status && <div className={`status-msg ${status.kind}`}>{status.text}</div>}
+
+      {keepOpen && (
+        <KeepDialog
+          onKeep={() => setKeepOpen(false)}
+          onRevert={async () => {
+            setThemes(saved)
+            setKeepOpen(false)
+          }}
+        />
+      )}
+
       {copySource && (
         <CopyDialog
-          busy={savingBusy}
-          onCancel={() => setCopying(null)}
-          onCreate={createCopy}
-          source={copySource}
+          source={themes.find(t => t.name === copySource)!}
           takenNames={themes.map(t => t.name)}
+          busy={savingBusy}
+          onCancel={() => setCopySource(null)}
+          onCreate={handleCopyCreate}
         />
       )}
     </div>
