@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import ThemeList from './components/ThemeList'
 import ThemeEditor from './components/ThemeEditor'
 import PreviewPane from './components/PreviewPane'
@@ -32,6 +32,7 @@ export default function App() {
   const [backupDir, setBackupDir] = useState(() => localStorage.getItem(BACKUP_DIR_KEY) ?? '')
   const [keepOpen, setKeepOpen] = useState(false)
   const [copySource, setCopySource] = useState<string | null>(null)
+  const preApplySaved = useRef<DesktopTheme[]>([])
 
   useEffect(() => {
     localStorage.setItem(MAX_BACKUPS_KEY, String(maxBackups))
@@ -146,6 +147,10 @@ export default function App() {
 
   const handleApply = async () => {
     if (!workingTheme) return
+    // Capture the pre-apply baseline so "Revert" can restore the in-memory
+    // draft to the state before this Apply (the disk write + backup already
+    // happened inside persist).
+    preApplySaved.current = saved
     const ok = await persist(themes)
     if (ok) setKeepOpen(true)
   }
@@ -278,7 +283,7 @@ export default function App() {
         <KeepDialog
           onKeep={() => setKeepOpen(false)}
           onRevert={async () => {
-            setThemes(saved)
+            setThemes(preApplySaved.current)
             setKeepOpen(false)
           }}
         />

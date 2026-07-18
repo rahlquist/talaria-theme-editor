@@ -64,17 +64,23 @@ whatever hot-reload the dev build provides).
 cd ~/projects/talaria-theme-editor
 npm install                  # if esbuild's binary is blocked: npm approve-scripts esbuild
 npm run dev                  # UI + API on http://localhost:5199
-npm test                     # 11 vitest tests (temp-copy round trips)
+npm test                     # 19 vitest tests (temp-copy round trips)
 npm run build                # strict tsc + vite bundle
 ```
+
+> Note: `npm run build` produces a static `dist/` bundle, but the editing
+> API only runs as Vite **dev-server middleware**. To actually write
+> `presets.ts` you must use `npm run dev` — a static `dist/` alone is UI-only.
 
 Architecture in one paragraph: a Vite dev server is the whole app. A config
 plugin (`hermesThemeApi` in vite.config.ts) serves `GET/POST /api/themes`,
 delegating to `src/server/presets-io.ts` (load = esbuild-evaluate presets.ts;
 save = copy backup, regenerate file from JSON). The React UI
-(`src/App.tsx`) shows a thumbnail grid (`ThemeCard`) with an Edit button per
-theme; `Editor.tsx` holds a draft, previews the committed theme in
-`PreviewPane` (mock Hermes window painted from `--dt-*` CSS vars), and on
-Apply shows the draft plus `KeepDialog` — a 10-second countdown that reverts
-the draft unless "Keep changes" is clicked. "Save to presets.ts" persists all
-kept edits. Per-phase state dumps live in `checkpoints/phase-{1..5}.md`.
+(`src/App.tsx`) shows a three-pane layout: a theme list (`ThemeList`) with an
+Edit/Copy/Remove button per theme; `ThemeEditor.tsx` holds the draft (colors
+grouped Surface/Muted/Brand/Accent/Borders/Destructive/Sidebar/Bubbles, light +
+dark palettes, typography) and previews the committed theme in `PreviewPane`
+(mock Hermes window painted from `--dt-*` CSS vars); the bottom **Apply Changes**
+button writes the draft to `presets.ts` and pops `KeepDialog` — a 10-second
+countdown that reverts `presets.ts` from its backup unless "Keep changes" is
+clicked. Per-phase state dumps live in `checkpoints/phase-{1..7}*.md`.
