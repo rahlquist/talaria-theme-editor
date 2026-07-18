@@ -6,6 +6,9 @@ presets — runs entirely outside Hermes and touches nothing in `~/.hermes`
 except `themes/presets.ts` (always backed up first as
 `yyyyddmm-epoch-presets.ts`).
 
+*Talaria* (Latin) — the winged sandals of Hermes/Mercury, the messenger god of
+speed. The name nods to Hermes, the agent whose themes this editor edits.
+
 > **⚠️ Proof of concept.** This is a POC built for personal use and is not
 > recommended for production. It rewrites your Hermes `presets.ts` (backups
 > are taken on every save, but still — use at your own risk).
